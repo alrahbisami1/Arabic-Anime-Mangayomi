@@ -110,6 +110,29 @@ class Anime3rb extends MProvider {
       ep.url = abs(href);
       eps.add(ep);
     }
+    if (eps.isEmpty) {
+      for (var sc in doc.select('script[type="application/ld+json"]')) {
+        try {
+          final j = jsonDecode(sc.text ?? '');
+          if (j is Map) {
+            final epList = j['episode'];
+            if (epList is List) {
+              for (var e in epList) {
+                final u = e['url']?.toString() ?? '';
+                if (u.isEmpty || !u.contains('/episode/')) continue;
+                final nm = e['name']?.toString() ?? '';
+                final numM = RegExp(r'الحلقة (\d+)').firstMatch(nm);
+                MChapter ep = MChapter();
+                ep.name = numM != null ? 'الحلقة ${numM.group(1)}' : nm;
+                ep.url = abs(u);
+                eps.add(ep);
+              }
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+    }
     anime.chapters = eps;
     return anime;
   }
@@ -119,13 +142,20 @@ class Anime3rb extends MProvider {
     final episodeHtml =
         (await client.get(Uri.parse(abs(url)), headers: {'Referer': baseUrl}))
             .body;
-    final match =
-        RegExp(r'&quot;video_url&quot;:&quot;(.*?)&quot;').firstMatch(
-          episodeHtml,
-        );
-    if (match == null) return [];
-    final playerUrl = match
-        .group(1)!
+    String? rawVideoUrl;
+    final escaped = RegExp(
+      r'&quot;video_url&quot;:&quot;(.*?)&quot;',
+    ).firstMatch(episodeHtml);
+    if (escaped != null) {
+      rawVideoUrl = escaped.group(1);
+    } else {
+      final plain = RegExp(
+        r'"video_url"\s*:\s*"(.*?)"',
+      ).firstMatch(episodeHtml);
+      if (plain != null) rawVideoUrl = plain.group(1);
+    }
+    if (rawVideoUrl == null) return [];
+    final playerUrl = rawVideoUrl
         .replaceAll('\\/', '/')
         .replaceAll('&amp;', '&');
 

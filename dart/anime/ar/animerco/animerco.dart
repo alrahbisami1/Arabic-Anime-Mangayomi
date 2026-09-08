@@ -8,7 +8,7 @@ class Animerco extends MProvider {
 
   final Client client = Client();
 
-  final Set<String> _seen = {};
+  final List<String> _seen = [];
 
   String get baseUrl => source.baseUrl ?? '';
 
