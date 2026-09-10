@@ -18,6 +18,14 @@ class Animerco extends MProvider {
 
   String get baseUrl => source.baseUrl ?? '';
 
+  Map? decodeJson(String s) {
+    try {
+      return jsonDecode(s) as Map?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<MPages> getPopular(int page) async {
     final url = page <= 1 ? '$baseUrl/animes/' : '$baseUrl/animes/page/$page/';
@@ -180,8 +188,16 @@ class Animerco extends MProvider {
   @override
   Future<List<MVideo>> getVideoList(String url) async {
     _seen = [];
-    final res =
-        (await client.get(Uri.parse(url), headers: browserHeaders)).body;
+    String res = '';
+    try {
+      res =
+          (await client
+                  .get(Uri.parse(url), headers: browserHeaders)
+                  .timeout(Duration(seconds: 20)))
+              .body;
+    } catch (_) {
+      return [];
+    }
     final doc = parseHtml(res);
     final options = doc.select('.server-list .option');
     if (options.isEmpty) return [];
@@ -190,11 +206,11 @@ class Animerco extends MProvider {
     String? security;
     final configMatch = RegExp(r'dtAjax\s*=\s*(\{.*?\})').firstMatch(res);
     if (configMatch != null) {
-      try {
-        final config = jsonDecode(configMatch.group(1)!) as Map;
+      final config = decodeJson(configMatch.group(1)!);
+      if (config != null) {
         ajaxUrl = config['url']?.toString();
         security = config['security']?.toString();
-      } catch (_) {}
+      }
     }
     final resolvedAjax = (ajaxUrl ?? '').startsWith('http')
         ? (ajaxUrl ?? '')
@@ -213,18 +229,25 @@ class Animerco extends MProvider {
       if (post.isEmpty || nume.isEmpty || nonce.isEmpty) continue;
       try {
         final body =
-            (await client.post(
-              Uri.parse(resolvedAjax),
-              headers: {'Referer': url, 'X-Requested-With': 'XMLHttpRequest'},
-              body: {
-                'action': 'player_ajax',
-                'security': nonce,
-                'post': post,
-                'nume': nume,
-                'type': type,
-              },
-            )).body;
-        final player = jsonDecode(body) as Map;
+            (await client
+                    .post(
+                      Uri.parse(resolvedAjax),
+                      headers: {
+                        'Referer': url,
+                        'X-Requested-With': 'XMLHttpRequest',
+                      },
+                      body: {
+                        'action': 'player_ajax',
+                        'security': nonce,
+                        'post': post,
+                        'nume': nume,
+                        'type': type,
+                      },
+                    )
+                    .timeout(Duration(seconds: 15)))
+                .body;
+        final player = decodeJson(body);
+        if (player == null) continue;
         final embed = player['embed_url']?.toString() ?? '';
         if (embed.isEmpty) continue;
         if (player['type'] == 'dtshcode') {
@@ -237,20 +260,23 @@ class Animerco extends MProvider {
                   t.attr('src') ?? t.attr('data-src') ?? '',
                   url,
                 );
-            if (subs.isNotEmpty) videos.addAll(subs);
+            if (subs != null && subs.isNotEmpty) videos.addAll(subs);
           }
           for (var m in RegExp(
             r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)[^"'<>\s]*)''',
           ).allMatches(embed)) {
             final subs = await getSourceVideos(m.group(1)!, url);
-            if (subs.isNotEmpty) videos.addAll(subs);
+            if (subs != null && subs.isNotEmpty) videos.addAll(subs);
           }
         } else {
           var finalEmbed = embed;
           if (embed.startsWith(baseUrl) && embed.contains('/jwplayer/')) {
             try {
               final playerDoc =
-                  parseHtml((await client.get(Uri.parse(embed), headers: {'Referer': url})).body);
+                  parseHtml((await client
+                              .get(Uri.parse(embed), headers: {'Referer': url})
+                              .timeout(Duration(seconds: 10)))
+                          .body);
               final iframe = playerDoc.selectFirst('iframe[src]')?.attr('src') ??
                   playerDoc.selectFirst('iframe[data-src]')?.attr('data-src') ??
                   '';
@@ -258,7 +284,7 @@ class Animerco extends MProvider {
             } catch (_) {}
           }
           final subs = await getSourceVideos(finalEmbed, url);
-          if (subs.isNotEmpty) videos.addAll(subs);
+          if (subs != null && subs.isNotEmpty) videos.addAll(subs);
         }
       } catch (_) {}
     }
@@ -271,25 +297,25 @@ class Animerco extends MProvider {
     _seen.add(srcUrl);
     final lower = srcUrl.toLowerCase();
     try {
-      if (lower.contains('dood')) return await doodExtractor(srcUrl, null);
-      if (lower.contains('voe')) return await voeExtractor(srcUrl, null);
+      if (lower.contains('dood')) return (await doodExtractor(srcUrl, null)) ?? [];
+      if (lower.contains('voe')) return (await voeExtractor(srcUrl, null)) ?? [];
       if (lower.contains('mp4upload')) {
-        return await mp4UploadExtractor(srcUrl, null, '', '');
+        return (await mp4UploadExtractor(srcUrl, null, '', '')) ?? [];
       }
-      if (lower.contains('ok.ru')) return await okruExtractor(srcUrl);
+      if (lower.contains('ok.ru')) return (await okruExtractor(srcUrl)) ?? [];
       if (lower.contains('vidbom') ||
           lower.contains('vidbam') ||
           lower.contains('vidbm')) {
-        return await vidBomExtractor(srcUrl);
+        return (await vidBomExtractor(srcUrl)) ?? [];
       }
       if (lower.contains('streamtape')) {
-        return await streamTapeExtractor(srcUrl, null);
+        return (await streamTapeExtractor(srcUrl, null)) ?? [];
       }
       if (lower.contains('filemoon')) {
-        return await filemoonExtractor(srcUrl, '', '');
+        return (await filemoonExtractor(srcUrl, '', '')) ?? [];
       }
       if (lower.contains('streamwish')) {
-        return await streamWishExtractor(srcUrl, '');
+        return (await streamWishExtractor(srcUrl, '')) ?? [];
       }
     } catch (_) {}
     if (RegExp(r'\.(m3u8|mp4)($|\?)').hasMatch(lower)) {
@@ -297,7 +323,9 @@ class Animerco extends MProvider {
     }
     try {
       final pageText =
-          (await client.get(Uri.parse(srcUrl), headers: {'Referer': referer}))
+          (await client
+                  .get(Uri.parse(srcUrl), headers: {'Referer': referer})
+                  .timeout(Duration(seconds: 12)))
               .body;
       final direct = RegExp(
         r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',

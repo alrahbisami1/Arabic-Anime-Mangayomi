@@ -220,7 +220,17 @@ class Animedar extends MProvider {
     final idx = int.tryParse(parts.last) ?? -1;
     if (idx < 0) return [];
 
-    final doc = parseHtml((await client.get(Uri.parse(abs(pageUrl)))).body);
+    String pageBody = '';
+    try {
+      pageBody =
+          (await client
+                  .get(Uri.parse(abs(pageUrl)))
+                  .timeout(Duration(seconds: 20)))
+              .body;
+    } catch (_) {
+      return [];
+    }
+    final doc = parseHtml(pageBody);
     final servers = doc.select('#ServerList1 div.divv11');
     if (servers.isEmpty || idx >= servers.length) return [];
     final lis = servers[idx].select('ul.ul-server-position1 li');
@@ -247,7 +257,7 @@ class Animedar extends MProvider {
         continue;
       }
       final subs = await getSourceVideos(embedUrl, abs(pageUrl));
-      if (subs.isNotEmpty) videos.addAll(subs);
+      if (subs != null && subs.isNotEmpty) videos.addAll(subs);
     }
     return sortVideos(videos);
   }
@@ -258,32 +268,32 @@ class Animedar extends MProvider {
     _seen.add(srcUrl);
     final lower = srcUrl.toLowerCase();
     try {
-      if (lower.contains('dood')) return await doodExtractor(srcUrl, null);
-      if (lower.contains('voe')) return await voeExtractor(srcUrl, null);
+      if (lower.contains('dood')) return (await doodExtractor(srcUrl, null)) ?? [];
+      if (lower.contains('voe')) return (await voeExtractor(srcUrl, null)) ?? [];
       if (lower.contains('mp4upload')) {
-        return await mp4UploadExtractor(srcUrl, null, '', '');
+        return (await mp4UploadExtractor(srcUrl, null, '', '')) ?? [];
       }
-      if (lower.contains('ok.ru')) return await okruExtractor(srcUrl);
+      if (lower.contains('ok.ru')) return (await okruExtractor(srcUrl)) ?? [];
       if (lower.contains('vidbom') ||
           lower.contains('vidbam') ||
           lower.contains('vidbm') ||
           lower.contains('vidbem')) {
-        return await vidBomExtractor(srcUrl);
+        return (await vidBomExtractor(srcUrl)) ?? [];
       }
       if (lower.contains('streamtape') || lower.contains('watchsb')) {
-        return await streamTapeExtractor(srcUrl, null);
+        return (await streamTapeExtractor(srcUrl, null)) ?? [];
       }
       if (lower.contains('filemoon')) {
-        return await filemoonExtractor(srcUrl, '', '');
+        return (await filemoonExtractor(srcUrl, '', '')) ?? [];
       }
       if (lower.contains('streamwish')) {
-        return await streamWishExtractor(srcUrl, '');
+        return (await streamWishExtractor(srcUrl, '')) ?? [];
       }
       if (lower.contains('sendvid')) {
-        return await sendVidExtractor(srcUrl, null, '');
+        return (await sendVidExtractor(srcUrl, null, '')) ?? [];
       }
       if (lower.contains('yourupload')) {
-        return await yourUploadExtractor(srcUrl, null, null, '');
+        return (await yourUploadExtractor(srcUrl, null, null, '')) ?? [];
       }
     } catch (_) {}
     if (RegExp(r'\.(m3u8|mp4)($|\?)').hasMatch(lower)) {
@@ -291,7 +301,9 @@ class Animedar extends MProvider {
     }
     try {
       final pageText =
-          (await client.get(Uri.parse(srcUrl), headers: {'Referer': referer}))
+          (await client
+                  .get(Uri.parse(srcUrl), headers: {'Referer': referer})
+                  .timeout(Duration(seconds: 12)))
               .body;
       final direct = RegExp(
         r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
