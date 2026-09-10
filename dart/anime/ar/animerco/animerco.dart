@@ -224,7 +224,7 @@ class Animerco extends MProvider {
             );
           }
           for (var m in RegExp(
-            r'(https?://[^"'<>\s]+?\.(?:m3u8|mp4)[^"'<>\s]*)',
+            r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)[^"'<>\s]*)''',
           ).allMatches(embed)) {
             videos.addAll(await getSourceVideos(m.group(1)!, url));
           }
@@ -282,7 +282,7 @@ class Animerco extends MProvider {
           (await client.get(Uri.parse(srcUrl), headers: {'Referer': referer}))
               .body;
       final direct = RegExp(
-        r'(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)',
+        r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
       ).firstMatch(pageText)?.group(1);
       if (direct != null) {
         return [MVideo(direct, 'Default', direct, headers: {'Referer': srcUrl})];

@@ -254,7 +254,7 @@ class AnimePhoenix extends MProvider {
           (await client.get(Uri.parse(srcUrl), headers: {'Referer': referer}))
               .body;
       final direct = RegExp(
-        r'(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)',
+        r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
       ).firstMatch(pageText)?.group(1);
       if (direct != null) {
         return [MVideo(direct, 'Default', direct, headers: {'Referer': srcUrl})];

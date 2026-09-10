@@ -17,17 +17,16 @@ class Animedar extends MProvider {
       : '${baseUrl}${url.startsWith('/') ? '' : '/'}$url';
 
   MManga? cardToManga(MElement cardEl) {
-    final card = cardEl.selectFirst('article.bs');
-    final link = card?.selectFirst('.bsx a[href*="/anime-p/"]') ??
-        card?.selectFirst('a[href*="/anime-p/"]');
+    final link = cardEl.selectFirst('.bsx a[href*="/anime-p/"]') ??
+        cardEl.selectFirst('a[href*="/anime-p/"]');
     final href = link?.attr('href') ?? '';
     if (href.isEmpty) return null;
     final title =
         (link?.attr('title') ?? '').trim().isNotEmpty
             ? link!.attr('title')!.trim()
-            : (card?.selectFirst('.tt h2')?.text ?? '').trim();
+            : (cardEl.selectFirst('.tt h2')?.text ?? '').trim();
     if (title.isEmpty) return null;
-    final img = card?.selectFirst('img');
+    final img = cardEl.selectFirst('img');
     MManga anime = MManga();
     anime.name = title;
     anime.link = abs(href);
@@ -294,7 +293,7 @@ class Animedar extends MProvider {
           (await client.get(Uri.parse(srcUrl), headers: {'Referer': referer}))
               .body;
       final direct = RegExp(
-        r'(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)',
+        r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
       ).firstMatch(pageText)?.group(1);
       if (direct != null) {
         return [MVideo(direct, 'Default', direct, headers: {'Referer': srcUrl})];
