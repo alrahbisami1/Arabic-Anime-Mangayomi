@@ -246,7 +246,8 @@ class Animedar extends MProvider {
         videos.add(MVideo(embedUrl, quality, embedUrl, headers: {'Referer': baseUrl}));
         continue;
       }
-      videos.addAll(await getSourceVideos(embedUrl, abs(pageUrl)));
+      final subs = await getSourceVideos(embedUrl, abs(pageUrl));
+      if (subs.isNotEmpty) videos.addAll(subs);
     }
     return sortVideos(videos);
   }

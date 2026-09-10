@@ -104,9 +104,12 @@ class Anime3rb extends MProvider {
       final href = el.attr('href') ?? '';
       if (!href.contains('/episode/') || seen.contains(href)) continue;
       seen.add(href);
-      final epNum = substringAfterLast(href, '/');
+      final tag = substringAfter(href, '/episode/');
+      var numM = RegExp(r'الحلقة\s*(\d+)').firstMatch(el.text ?? '');
+      numM ??= RegExp(r'/(\d+)(?:/|$)').firstMatch(tag);
+      final num = numM?.group(1) ?? substringAfterLast(href, '/');
       MChapter ep = MChapter();
-      ep.name = el.selectFirst('p')?.text ?? 'الحلقة $epNum';
+      ep.name = 'الحلقة $num';
       ep.url = abs(href);
       eps.add(ep);
     }
@@ -133,6 +136,9 @@ class Anime3rb extends MProvider {
         } catch (_) {}
       }
     }
+    int epNumOf(MChapter c) =>
+        int.tryParse(substringAfterLast(c.name ?? '', ' ')) ?? 2147483647;
+    eps.sort((a, b) => epNumOf(a).compareTo(epNumOf(b)));
     anime.chapters = eps;
     return anime;
   }

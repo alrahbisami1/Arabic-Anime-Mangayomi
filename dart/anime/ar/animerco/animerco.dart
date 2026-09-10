@@ -10,12 +10,18 @@ class Animerco extends MProvider {
 
   List<String>? _seen;
 
+  static const Map<String, String> browserHeaders = {
+    'User-Agent':
+        'Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+    'Accept-Language': 'ar,en;q=0.8',
+  };
+
   String get baseUrl => source.baseUrl ?? '';
 
   @override
   Future<MPages> getPopular(int page) async {
     final url = page <= 1 ? '$baseUrl/animes/' : '$baseUrl/animes/page/$page/';
-    final res = (await client.get(Uri.parse(url))).body;
+    final res = (await client.get(Uri.parse(url), headers: browserHeaders)).body;
     return parseMediaBlock(res);
   }
 
@@ -24,14 +30,18 @@ class Animerco extends MProvider {
     final url = page <= 1
         ? '$baseUrl/episodes/'
         : '$baseUrl/episodes/page/$page/';
-    final res = (await client.get(Uri.parse(url))).body;
+    final res = (await client.get(Uri.parse(url), headers: browserHeaders)).body;
     return parseMediaBlock(res);
   }
 
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
     final res =
-        (await client.get(Uri.parse('$baseUrl/?s=${Uri.encodeQueryComponent(query)}')))
+        (await client
+                .get(
+                  Uri.parse('$baseUrl/?s=${Uri.encodeQueryComponent(query)}'),
+                  headers: browserHeaders,
+                ))
             .body;
     return parseMediaBlock(res);
   }
@@ -104,7 +114,8 @@ class Animerco extends MProvider {
   @override
   Future<MManga> getDetail(String url) async {
     if (url.contains('/episodes/')) {
-      final doc = parseHtml((await client.get(Uri.parse(url))).body);
+      final doc =
+          parseHtml((await client.get(Uri.parse(url), headers: browserHeaders)).body);
       final parent =
           doc.selectFirst('.page-controls a[href*="/animes/"]')?.attr('href') ??
               doc.selectFirst('.breadcrumb a[href*="/animes/"]')?.attr('href') ??
@@ -125,7 +136,8 @@ class Animerco extends MProvider {
   }
 
   Future<MManga> loadDetails(String url) async {
-    final doc = parseHtml((await client.get(Uri.parse(url))).body);
+    final doc =
+        parseHtml((await client.get(Uri.parse(url), headers: browserHeaders)).body);
     MManga anime = MManga();
     anime.name =
         (doc.selectFirst('.media-title h1')?.text ?? doc.selectFirst('h1')?.text ?? '')
@@ -151,7 +163,7 @@ class Animerco extends MProvider {
       for (var season in seasons) {
         try {
           final seasonDoc =
-              parseHtml((await client.get(Uri.parse(season))).body);
+              parseHtml((await client.get(Uri.parse(season), headers: browserHeaders)).body);
           eps.addAll(collectEpisodes(seasonDoc));
         } catch (_) {}
       }
@@ -168,7 +180,8 @@ class Animerco extends MProvider {
   @override
   Future<List<MVideo>> getVideoList(String url) async {
     _seen = [];
-    final res = (await client.get(Uri.parse(url))).body;
+    final res =
+        (await client.get(Uri.parse(url), headers: browserHeaders)).body;
     final doc = parseHtml(res);
     final options = doc.select('.server-list .option');
     if (options.isEmpty) return [];
@@ -219,14 +232,18 @@ class Animerco extends MProvider {
           for (var t in frag.select(
             'iframe[src], iframe[data-src], source[src], video[src]',
           )) {
-            videos.addAll(
-              await getSourceVideos(t.attr('src') ?? t.attr('data-src') ?? '', url),
-            );
+            final subs =
+                await getSourceVideos(
+                  t.attr('src') ?? t.attr('data-src') ?? '',
+                  url,
+                );
+            if (subs.isNotEmpty) videos.addAll(subs);
           }
           for (var m in RegExp(
             r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)[^"'<>\s]*)''',
           ).allMatches(embed)) {
-            videos.addAll(await getSourceVideos(m.group(1)!, url));
+            final subs = await getSourceVideos(m.group(1)!, url);
+            if (subs.isNotEmpty) videos.addAll(subs);
           }
         } else {
           var finalEmbed = embed;
@@ -240,7 +257,8 @@ class Animerco extends MProvider {
               if (iframe.startsWith('http')) finalEmbed = iframe;
             } catch (_) {}
           }
-          videos.addAll(await getSourceVideos(finalEmbed, url));
+          final subs = await getSourceVideos(finalEmbed, url);
+          if (subs.isNotEmpty) videos.addAll(subs);
         }
       } catch (_) {}
     }

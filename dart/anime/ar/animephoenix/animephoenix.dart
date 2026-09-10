@@ -171,22 +171,33 @@ class AnimePhoenix extends MProvider {
 
     List<MChapter> eps = [];
     final seen = <String>{};
-    for (var el in doc.select('a.FJ-EpPill')) {
-      final href = el.attr('href') ?? '';
-      if (!href.contains('/episodes/') || seen.contains(href)) continue;
+    void addEpisode(String href) {
+      if (href.isEmpty || !href.contains('/episodes/') || seen.contains(href)) {
+        return;
+      }
       seen.add(href);
-      final numM = RegExp(r'(\d+)\s*$').firstMatch(el.text ?? '') ??
-          RegExp(r'-episode-(\d+)').firstMatch(href);
+      final numM = RegExp(r'-episode-(\d+)').firstMatch(href);
       MChapter ep = MChapter();
-      ep.name = 'الحلقة ${numM?.group(1) ?? ''}';
+      ep.name = numM != null ? 'الحلقة ${numM.group(1)}' : 'المشاهدة';
       ep.url = abs(href);
       eps.add(ep);
     }
-    eps.sort((a, b) {
-      final numA = RegExp(r'(\d+)').firstMatch(a.url ?? '')?.group(1);
-      final numB = RegExp(r'(\d+)').firstMatch(b.url ?? '')?.group(1);
-      return (int.tryParse(numA ?? '') ?? 0) - (int.tryParse(numB ?? '') ?? 0);
-    });
+
+    for (var el in doc.select('a.FJ-EpPill, a.FJ-episode-wrap')) {
+      addEpisode(el.attr('href') ?? '');
+    }
+    if (eps.isEmpty) {
+      final epsPage = '${fixed.replaceAll(RegExp(r'/$'), '')}/episodes';
+      final edoc = parseHtml((await client.get(Uri.parse(epsPage))).body);
+      for (var el in edoc.select('a.FJ-episode-wrap')) {
+        addEpisode(el.attr('href') ?? '');
+      }
+    }
+    int epNumOf(MChapter c) {
+      final m = RegExp(r'-episode-(\d+)').firstMatch(c.url ?? '');
+      return m != null ? (int.tryParse(m.group(1)!) ?? 0) : 2147483647;
+    }
+    eps.sort((a, b) => epNumOf(a).compareTo(epNumOf(b)));
     anime.chapters = eps;
     return anime;
   }
@@ -213,7 +224,8 @@ class AnimePhoenix extends MProvider {
       for (var iframe in template.select('iframe')) {
         final iframeUrl = iframe.attr('src') ?? '';
         if (iframeUrl.isEmpty) continue;
-        videos.addAll(await getSourceVideos(iframeUrl, url));
+        final subs = await getSourceVideos(iframeUrl, url);
+        if (subs.isNotEmpty) videos.addAll(subs);
       }
     }
     return sortVideos(videos);
