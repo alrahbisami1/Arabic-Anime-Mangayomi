@@ -8,7 +8,7 @@ class Animedar extends MProvider {
 
   final Client client = Client();
 
-  final List<String> _seen = [];
+  List<String>? _seen;
 
   String get baseUrl => source.baseUrl ?? '';
 
@@ -213,8 +213,8 @@ class Animedar extends MProvider {
   }
 
   @override
-  Future<List<Video>> getVideoList(String data) async {
-    _seen.clear();
+  Future<List<MVideo>> getVideoList(String data) async {
+    _seen = [];
     final parts = data.split('|');
     if (parts.length < 2) return [];
     final pageUrl = parts.sublist(0, parts.length - 1).join('|');
@@ -227,7 +227,7 @@ class Animedar extends MProvider {
     final lis = servers[idx].select('ul.ul-server-position1 li');
     if (lis.isEmpty) return [];
 
-    List<Video> videos = [];
+    List<MVideo> videos = [];
     for (var el in lis) {
       final type = (el.attr('type') ?? '').isEmpty
           ? (el.attr('class') ?? '')
@@ -252,7 +252,8 @@ class Animedar extends MProvider {
     return sortVideos(videos);
   }
 
-  Future<List<Video>> getSourceVideos(String srcUrl, String referer) async {
+  Future<List<MVideo>> getSourceVideos(String srcUrl, String referer) async {
+    if (_seen == null) _seen = [];
     if (srcUrl.isEmpty || srcUrl == referer || _seen.contains(srcUrl)) return [];
     _seen.add(srcUrl);
     final lower = srcUrl.toLowerCase();
@@ -302,7 +303,7 @@ class Animedar extends MProvider {
     return [];
   }
 
-  List<Video> sortVideos(List<Video> videos) {
+  List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
       final numA =
           int.tryParse(

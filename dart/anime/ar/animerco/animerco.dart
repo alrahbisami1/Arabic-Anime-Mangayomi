@@ -8,7 +8,7 @@ class Animerco extends MProvider {
 
   final Client client = Client();
 
-  final List<String> _seen = [];
+  List<String>? _seen;
 
   String get baseUrl => source.baseUrl ?? '';
 
@@ -166,8 +166,8 @@ class Animerco extends MProvider {
   }
 
   @override
-  Future<List<Video>> getVideoList(String url) async {
-    _seen.clear();
+  Future<List<MVideo>> getVideoList(String url) async {
+    _seen = [];
     final res = (await client.get(Uri.parse(url))).body;
     final doc = parseHtml(res);
     final options = doc.select('.server-list .option');
@@ -187,7 +187,7 @@ class Animerco extends MProvider {
         ? (ajaxUrl ?? '')
         : '${baseUrl.replaceAll(RegExp(r'/$'), '')}${(ajaxUrl ?? '').isEmpty ? '/wp-admin/admin-ajax.php' : ajaxUrl!}';
 
-    List<Video> videos = [];
+    List<MVideo> videos = [];
     for (var option in options) {
       final post = option.attr('data-post') ?? '';
       final nume = option.attr('data-nume') ?? '';
@@ -247,7 +247,8 @@ class Animerco extends MProvider {
     return sortVideos(videos);
   }
 
-  Future<List<Video>> getSourceVideos(String srcUrl, String referer) async {
+  Future<List<MVideo>> getSourceVideos(String srcUrl, String referer) async {
+    if (_seen == null) _seen = [];
     if (srcUrl.isEmpty || srcUrl == referer || _seen.contains(srcUrl)) return [];
     _seen.add(srcUrl);
     final lower = srcUrl.toLowerCase();
@@ -290,7 +291,7 @@ class Animerco extends MProvider {
     return [];
   }
 
-  List<Video> sortVideos(List<Video> videos) {
+  List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
       final numA =
           int.tryParse(

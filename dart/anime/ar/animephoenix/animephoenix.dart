@@ -8,7 +8,7 @@ class AnimePhoenix extends MProvider {
 
   final Client client = Client();
 
-  final List<String> _seen = [];
+  List<String>? _seen;
 
   String get baseUrl => source.baseUrl ?? '';
 
@@ -192,13 +192,13 @@ class AnimePhoenix extends MProvider {
   }
 
   @override
-  Future<List<Video>> getVideoList(String url) async {
-    _seen.clear();
+  Future<List<MVideo>> getVideoList(String url) async {
+    _seen = [];
     final doc = parseHtml((await client.get(Uri.parse(url))).body);
     final template = doc.selectFirst('#player-html-template');
     if (template == null) return [];
 
-    List<Video> videos = [];
+    List<MVideo> videos = [];
     final videoSrc = template.selectFirst('video source')?.attr('src')?.trim() ?? '';
     if (videoSrc.isNotEmpty) {
       final qMatch = RegExp(r'(\d{3,4})p').firstMatch(videoSrc);
@@ -219,7 +219,8 @@ class AnimePhoenix extends MProvider {
     return sortVideos(videos);
   }
 
-  Future<List<Video>> getSourceVideos(String srcUrl, String referer) async {
+  Future<List<MVideo>> getSourceVideos(String srcUrl, String referer) async {
+    if (_seen == null) _seen = [];
     if (srcUrl.isEmpty || srcUrl == referer || _seen.contains(srcUrl)) return [];
     _seen.add(srcUrl);
     final lower = srcUrl.toLowerCase();
@@ -262,7 +263,7 @@ class AnimePhoenix extends MProvider {
     return [];
   }
 
-  List<Video> sortVideos(List<Video> videos) {
+  List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
       final numA =
           int.tryParse(

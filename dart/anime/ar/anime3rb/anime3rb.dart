@@ -138,7 +138,7 @@ class Anime3rb extends MProvider {
   }
 
   @override
-  Future<List<Video>> getVideoList(String url) async {
+  Future<List<MVideo>> getVideoList(String url) async {
     final episodeHtml =
         (await client.get(Uri.parse(abs(url)), headers: {'Referer': baseUrl}))
             .body;
@@ -173,7 +173,7 @@ class Anime3rb extends MProvider {
     if (json == null) return [];
 
     final sources = jsonDecode(json) as List;
-    List<Video> videos = [];
+    List<MVideo> videos = [];
     for (var s in sources) {
       final src = s['src']?.toString() ?? '';
       if (s['premium'] == true || src.isEmpty) continue;
@@ -189,7 +189,7 @@ class Anime3rb extends MProvider {
     return sortVideos(videos);
   }
 
-  List<Video> sortVideos(List<Video> videos) {
+  List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
       final numA =
           int.tryParse(
