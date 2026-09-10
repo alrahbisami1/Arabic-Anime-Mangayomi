@@ -18,13 +18,12 @@
 1. **ثبّت تطبيق Mangayomi** على الآيفون من النسخة الرسمية:
    https://github.com/kodjodevf/mangayomi/releases
 
-2. **ارفع هذا المستودع إلى GitHub** ثم فعّل **GitHub Pages** من:
-   `Settings → Pages → Source: Deploy from a branch → main (root)`.
+2. **ارفع هذا المستودع إلى GitHub** (إن لم يكن مرفوعًا).
 
 3. في التطبيق: **More → Settings → Browse → Anime extensions repo → Add** ثم أدخل الرابط:
 
    ```
-   https://alrahbisami1.github.io/Arabic-Anime-Mangayomi/
+   https://raw.githubusercontent.com/alrahbisami1/Arabic-Anime-Mangayomi/main/index.json
    ```
 
 4. افتح Now → Anime وستجد الامتدادات الأربعة، اضغط تثبيت بجانبها.
