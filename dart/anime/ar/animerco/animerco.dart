@@ -291,13 +291,112 @@ class Animerco extends MProvider {
     return sortVideos(videos);
   }
 
+  Future<List<MVideo>> googleDriveExtractor(String srcUrl) async {
+    String? fileId;
+    final idMatch = RegExp(
+      r'''/file/d/([^/]+)''',
+    ).firstMatch(srcUrl);
+    if (idMatch != null) {
+      fileId = idMatch.group(1);
+    } else {
+      final q = Uri.tryParse(srcUrl)?.queryParameters;
+      fileId = q?['id'] ?? q?['docid'] ?? q?['uc?id'];
+    }
+    if (fileId == null || fileId.isEmpty) return [];
+    final direct = RegExp(
+      r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
+    ).firstMatch(srcUrl)?.group(1);
+    if (direct != null) {
+      return [
+        MVideo(direct, 'Drive', direct, headers: {'Referer': baseUrl}),
+      ];
+    }
+    List<MVideo> videos = [];
+    final confirmed = (await client.get(
+      Uri.parse(
+        'https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t',
+      ),
+      headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+      followRedirects: false,
+    )).statusCode;
+    if (confirmed == 302) {
+      final redir = (await client.get(
+        Uri.parse(
+          'https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t',
+        ),
+        headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+      )).request.url;
+      videos.add(
+        MVideo(redir, 'Drive', redir, headers: {'Referer': baseUrl}),
+      );
+      return videos;
+    }
+    try {
+      final meta = (await client
+              .get(
+                Uri.parse(
+                  'https://drive.google.com/get_video_info?docid=$fileId',
+                ),
+                headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+              )
+              .timeout(Duration(seconds: 12)))
+          .body;
+      final streams = Uri.splitQueryString(meta)['fmt_stream_map'] ?? '';
+      if (streams.isNotEmpty) {
+        for (var entry in streams.split(',')) {
+          final parts = entry.split('|');
+          if (parts.length < 2) continue;
+          final urlPart = parts.sublist(1).join('|');
+          if (urlPart.isEmpty) continue;
+          videos.add(
+            MVideo(
+              Uri.decodeFull(urlPart),
+              'Drive',
+              Uri.decodeFull(urlPart),
+              headers: {'Referer': baseUrl},
+            ),
+          );
+        }
+        if (videos.isNotEmpty) return videos;
+      }
+    } catch (_) {}
+    try {
+      final previewText =
+          (await client
+                  .get(
+                    Uri.parse(
+                      'https://drive.google.com/file/d/$fileId/preview',
+                    ),
+                    headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+                  )
+                  .timeout(Duration(seconds: 12)))
+              .body;
+      final m3u8 = RegExp(
+        r'''(https?://[^"'\s<>]+?\.m3u8(?:\?[^"'\s<>]*)?)''',
+      ).firstMatch(previewText)?.group(1);
+      if (m3u8 != null) {
+        return [
+          MVideo(m3u8, 'Drive', m3u8, headers: {'Referer': baseUrl}),
+        ];
+      }
+    } catch (_) {}
+    return videos;
+  }
+
   Future<List<MVideo>> getSourceVideos(String srcUrl, String referer) async {
     if (_seen == null) _seen = [];
     if (srcUrl.isEmpty || srcUrl == referer || _seen.contains(srcUrl)) return [];
     _seen.add(srcUrl);
     final lower = srcUrl.toLowerCase();
     try {
-      if (lower.contains('dood')) return (await doodExtractor(srcUrl, null)) ?? [];
+      if (lower.contains('drive.google.com') ||
+          lower.contains('docs.google.com') ||
+          lower.contains('drive.usercontent')) {
+        return (await googleDriveExtractor(srcUrl)) ?? [];
+      }
+      if (lower.contains('dood')) {
+        return (await doodExtractor(srcUrl, null)) ?? [];
+      }
       if (lower.contains('voe')) return (await voeExtractor(srcUrl, null)) ?? [];
       if (lower.contains('mp4upload')) {
         return (await mp4UploadExtractor(srcUrl, null, '', '')) ?? [];

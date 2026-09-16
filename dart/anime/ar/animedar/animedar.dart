@@ -292,10 +292,22 @@ class Animedar extends MProvider {
       if (lower.contains('sendvid')) {
         return (await sendVidExtractor(srcUrl, null, '')) ?? [];
       }
+      if (lower.contains(
+        'drive.google.com',
+      ) ||
+          lower.contains('docs.google.com') ||
+          lower.contains('drive.usercontent')) {
+        return (await googleDriveExtractor(srcUrl, referer)) ?? [];
+      }
       if (lower.contains('yourupload')) {
         return (await yourUploadExtractor(srcUrl, null, null, '')) ?? [];
       }
     } catch (_) {}
+    if (lower.contains('drive.google.com') ||
+        lower.contains('docs.google.com') ||
+        lower.contains('drive.usercontent.google.com')) {
+      return (await googleDriveExtractor(srcUrl)) ?? [];
+    }
     if (RegExp(r'\.(m3u8|mp4)($|\?)').hasMatch(lower)) {
       return [MVideo(srcUrl, 'Default', srcUrl, headers: {'Referer': referer})];
     }
@@ -313,6 +325,89 @@ class Animedar extends MProvider {
       }
     } catch (_) {}
     return [];
+  }
+
+  Future<List<MVideo>> googleDriveExtractor(
+    String srcUrl, [
+    String? referer,
+  ]) async {
+    String? fileId;
+    final idMatch = RegExp(r'''(/d/([^/]+))''').firstMatch(srcUrl);
+    if (idMatch != null) {
+      fileId = idMatch.group(2);
+    } else {
+      final q = Uri.tryParse(srcUrl)?.queryParameters;
+      fileId = q?['id'] ?? q?['docid'];
+    }
+    if (fileId == null || fileId.isEmpty) return [];
+    try {
+      final confirmed = (await client
+              .get(
+                Uri.parse(
+                  'https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t',
+                ),
+                headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+                followRedirects: false,
+              ))
+          .statusCode;
+      if (confirmed == 302) {
+        final redir =
+            (await client.get(
+                  Uri.parse(
+                    'https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t',
+                  ),
+                  headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+                ))
+                .request
+                .url;
+        return [
+          MVideo(redir.toString(), 'Drive', redir.toString(), headers: {'Referer': 'https://drive.google.com/'}),
+        ];
+      }
+    } catch (_) {}
+    videos.clear();
+    try {
+      final metaUrl =
+          'https://drive.google.com/get_video_info?docid=$fileId';
+      final meta =
+          (await client
+                  .get(
+                    Uri.parse(metaUrl),
+                    headers: {...browserHeaders, 'Referer': 'https://drive.google.com/'},
+                  )
+                  .timeout(Duration(seconds: 12)))
+              .body;
+      final fmtStream = RegExp(
+        r'fmt_stream_map=([^&\s]+)',
+      ).firstMatch(meta)?.group(1);
+      if (fmtStream != null) {
+        final entries = Uri.decodeFull(fmtStream).split(',');
+        for (var entry in entries) {
+          final idx = entry.indexOf('|');
+          if (idx < 0) continue;
+          final itag = entry.substring(0, idx);
+          final url = entry.substring(idx + 1);
+          final quality = switch (itag) {
+            '37' || '22' || '18' => '720p',
+            '59' => '480p',
+            //__':
+            _ => 'Default',
+          };
+          if (url.isNotEmpty) {
+            videos.add(
+              MVideo(
+                Uri.decodeFull(url),
+                quality,
+                Uri.decodeFull(url),
+                headers: {'Referer': 'https://drive.google.com/'},
+              ),
+            );
+          }
+        }
+        if (videos.isNotEmpty) return videos;
+      }
+    } catch (_) {}
+    return videos;
   }
 
   List<MVideo> sortVideos(List<MVideo> videos) {
