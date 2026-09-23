@@ -6,7 +6,10 @@ class WitAnime extends MProvider {
 
   MSource source;
 
-  final Client client = Client();
+  final Client client =
+      Client(source, '{"useDartHttpClient": true, "followRedirects": true}');
+  final Client gateClient =
+      Client(source, '{"useDartHttpClient": true, "followRedirects": false}');
 
   static const String domain = 'https://witanime.site';
 
@@ -131,37 +134,108 @@ class WitAnime extends MProvider {
     return substringAfter(m, 'data-csrf="').replaceAll('"', '');
   }
 
-  String extractCookies(Map headers) {
-    final sc = headers['set-cookie'];
-    if (sc == null || sc.toString().isEmpty) return '';
-    final lines = sc.toString().split('\n');
-    final pairs = <String>[];
-    for (final line in lines) {
-      final one = substringBefore(line.trim(), ';');
-      if (one.trim().isEmpty || one.contains('=') == false) continue;
-      pairs.add(one);
+  String headerValue(Map headers, String name) {
+    for (final k in headers.keys) {
+      if (k.toLowerCase() == name.toLowerCase()) {
+        final v = headers[k];
+        return v == null ? '' : v.toString();
+      }
     }
-    return pairs.join('; ');
+    return '';
   }
+
+  String extractCookies(Map headers) {
+    final raw = headerValue(headers, 'set-cookie');
+    if (raw.isEmpty) return '';
+    final cookies = <String>[];
+    final w = RegExp(r'witanime-session=[^;\s,]+').stringMatch(raw);
+    if (w != null) cookies.add(w);
+    final x = RegExp(r'XSRF-TOKEN=[^;\s,]+').stringMatch(raw);
+    if (x != null) cookies.add(x);
+    return cookies.join('; ');
+  }
+
+  String locationHeader(Map headers) => headerValue(headers, 'location');
 
   Future<String> resolveGate(String token, String referer, String csrf, String cookie) async {
     try {
-      final r = await client.get(
-        Uri.parse('$baseUrl/watch/stream-gate/$token'),
-        headers: {
-          ...browserHeaders,
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrf,
-          'Cookie': cookie,
-          'Referer': referer,
-        },
-      );
-      final u = r.request.url.toString();
-      if (u.startsWith('http')) return u;
+      final r = await gateClient
+          .get(
+            Uri.parse('$baseUrl/watch/stream-gate/$token'),
+            headers: {
+              ...browserHeaders,
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': csrf,
+              'Cookie': cookie,
+              'Referer': referer,
+            },
+          )
+          .timeout(Duration(seconds: 25));
+      final loc = locationHeader(r.headers);
+      if (loc.isNotEmpty && (loc.startsWith('http') || loc.startsWith('//'))) {
+        return loc.startsWith('//') ? 'https:$loc' : loc;
+      }
       return '';
     } catch (_) {
       return '';
     }
+  }
+
+  String extractEmbedId(String embed) {
+    final trimmed = embed.replaceAll(RegExp(r'/$'), '');
+    final id = substringAfterLast(trimmed, '/e/');
+    if (id.isEmpty || id == trimmed) return '';
+    return substringBefore(id, '?').trim();
+  }
+
+  Future<String> fetchAudiniferEmbed(String id) async {
+    try {
+      final r = await client
+          .get(
+            Uri.parse('https://audinifer.com/e/$id'),
+            headers: {
+              ...browserHeaders,
+              'Referer': 'https://witanime.site/',
+            },
+          )
+          .timeout(Duration(seconds: 30));
+      if (r.statusCode != 200) return '';
+      return r.body;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String extractHls(String unpacked, String key) {
+    final token = '"$key":"';
+    if (unpacked.contains(token)) {
+      final rest = substringAfter(unpacked, token);
+      final url = substringBefore(rest, '"').trim();
+      if (url.startsWith('http')) return url;
+    }
+    return '';
+  }
+
+  Future<List<MVideo>> resolveHlsVideos(
+      String embedUrl, String quality) async {
+    final videos = <MVideo>[];
+    try {
+      final id = extractEmbedId(embedUrl);
+      if (id.isEmpty) return videos;
+      final html = await fetchAudiniferEmbed(id);
+      if (html.isEmpty) return videos;
+      final unpacked = unpackJsAndCombine(html) ?? '';
+      if (unpacked.isEmpty) return videos;
+      for (final key in ['hls3', 'hls2']) {
+        final hls = extractHls(unpacked, key);
+        if (hls.isEmpty) continue;
+        videos.add(MVideo(hls, quality, hls, headers: {
+          ...browserHeaders,
+          'Referer': 'https://audinifer.com/',
+        }));
+      }
+    } catch (_) {}
+    return videos;
   }
 
   @override
@@ -185,15 +259,18 @@ class WitAnime extends MProvider {
     if (csrf.isEmpty) return [];
     String body = '';
     try {
-      final postRes = await client.post(
-        Uri.parse('$url/sources'),
-        headers: {
-          ...browserHeaders,
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrf,
-          'Cookie': cookie,
-        },
-      );
+      final postRes = await client
+          .post(
+            Uri.parse('$url/sources'),
+            headers: {
+              ...browserHeaders,
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': csrf,
+              'Cookie': cookie,
+              'Referer': url,
+            },
+          )
+          .timeout(Duration(seconds: 25));
       if (postRes.statusCode == 200) {
         body = postRes.body;
       }
@@ -219,13 +296,11 @@ class WitAnime extends MProvider {
                 final token = map['token']?.toString() ?? '';
                 final label = map['label']?.toString() ?? 'server';
                 if (token.isEmpty || token == 'null') continue;
+                final quality = '$q • $label';
                 final embedUrl = await resolveGate(token, url, csrf, cookie);
                 if (embedUrl.isEmpty) continue;
-                final quality = '$q • $label';
-                videos.add(MVideo(embedUrl, quality, embedUrl, headers: {
-                  ...browserHeaders,
-                  'Referer': url,
-                }));
+                final hlsVideos = await resolveHlsVideos(embedUrl, quality);
+                if (hlsVideos.isNotEmpty) videos.addAll(hlsVideos);
               } catch (_) {}
             }
           }
