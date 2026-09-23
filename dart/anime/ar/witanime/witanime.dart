@@ -6,9 +6,9 @@ class WitAnime extends MProvider {
 
   MSource source;
 
-  final Client client =
+  late final Client client =
       Client(source, '{"useDartHttpClient": true, "followRedirects": true}');
-  final Client gateClient =
+  late final Client gateClient =
       Client(source, '{"useDartHttpClient": true, "followRedirects": false}');
 
   static const String domain = 'https://witanime.site';

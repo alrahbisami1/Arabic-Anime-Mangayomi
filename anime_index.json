@@ -34,14 +34,14 @@
     "hasCloudflare": true,
     "sourceCodeUrl": "https://raw.githubusercontent.com/alrahbisami1/Arabic-Anime-Mangayomi/main/dart/anime/ar/witanime/witanime.dart",
     "apiUrl": "",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "isManga": false,
     "itemType": 1,
     "isFullData": false,
     "appMinVerReq": "0.5.0",
     "additionalParams": "",
     "sourceCodeLanguage": 0,
-    "notes": "قوائم/بحث/تفاصيل تعمل — التشغيل عبر hgcloud/audinifer HLS مباشرة"
+    "notes": "إصلاح إضافة المصدر: تأجيل إنشاء client حتى ربط source"
   },
   {
     "name": "AnimePhoenix",
