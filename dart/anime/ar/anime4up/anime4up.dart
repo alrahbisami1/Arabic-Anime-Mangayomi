@@ -25,8 +25,9 @@ class Anime4up extends MProvider {
   int? extractEpNumber(String text) {
     try {
       final decoded = Uri.decodeComponent(text);
-      final m = RegExp(r'الحلقة\s*(\d+)').firstMatch(decoded);
-      return m != null ? int.tryParse(m.group(1)!) : null;
+      final m = RegExp(r'الحلقة\s*\d+').stringMatch(decoded);
+      if (m == null) return null;
+      return int.tryParse(substringAfter(m, 'الحلقة').trim());
     } catch (_) {
       return null;
     }
@@ -323,8 +324,8 @@ class Anime4up extends MProvider {
           : <MVideo>[];
       if (inertia.isNotEmpty) return inertia;
       final direct = RegExp(
-        r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
-      ).firstMatch(checkText)?.group(1);
+        r'''https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?''',
+      ).stringMatch(checkText);
       if (direct != null) {
         return [MVideo(direct, quality, direct, headers: {'Referer': srcUrl})];
       }
@@ -334,9 +335,9 @@ class Anime4up extends MProvider {
 
   Future<List<MVideo>> googleDriveExtractor(String srcUrl, [String? referer]) async {
     String? fileId;
-    final idMatch = RegExp(r'''(/d/([^/]+))''').firstMatch(srcUrl);
-    if (idMatch != null) {
-      fileId = idMatch.group(2);
+    final idPart = RegExp(r'''/d/[^/]+''').stringMatch(srcUrl);
+    if (idPart != null) {
+      fileId = substringAfter(idPart, '/d/');
     } else {
       final q = Uri.tryParse(srcUrl)?.queryParameters;
       fileId = q?['id'] ?? q?['docid'];
@@ -372,18 +373,12 @@ class Anime4up extends MProvider {
 
   List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
+      final qA = RegExp(r'\d{3,4}\s*p').stringMatch(a.quality);
       final numA =
-          int.tryParse(
-                RegExp(r'(\d{3,4})\s*p').firstMatch(a.quality)?.group(1) ??
-                    '',
-              ) ??
-              0;
+          int.tryParse(substringBefore(qA ?? '', 'p').trim()) ?? 0;
+      final qB = RegExp(r'\d{3,4}\s*p').stringMatch(b.quality);
       final numB =
-          int.tryParse(
-                RegExp(r'(\d{3,4})\s*p').firstMatch(b.quality)?.group(1) ??
-                    '',
-              ) ??
-              0;
+          int.tryParse(substringBefore(qB ?? '', 'p').trim()) ?? 0;
       return numB - numA;
     });
     return videos;

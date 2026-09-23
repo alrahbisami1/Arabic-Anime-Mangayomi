@@ -176,9 +176,11 @@ class AnimePhoenix extends MProvider {
         return;
       }
       seen.add(href);
-      final numM = RegExp(r'-episode-(\d+)').firstMatch(href);
+      final epTag = RegExp(r'-episode-\d+').stringMatch(href);
       MChapter ep = MChapter();
-      ep.name = numM != null ? 'الحلقة ${numM.group(1)}' : 'المشاهدة';
+      ep.name = epTag != null
+          ? 'الحلقة ${substringAfter(epTag, '-episode-')}'
+          : 'المشاهدة';
       ep.url = abs(href);
       eps.add(ep);
     }
@@ -194,8 +196,9 @@ class AnimePhoenix extends MProvider {
       }
     }
     int epNumOf(MChapter c) {
-      final m = RegExp(r'-episode-(\d+)').firstMatch(c.url ?? '');
-      return m != null ? (int.tryParse(m.group(1)!) ?? 0) : 2147483647;
+      final epTag = RegExp(r'-episode-\d+').stringMatch(c.url ?? '');
+      if (epTag == null) return 2147483647;
+      return int.tryParse(substringAfter(epTag, '-episode-')) ?? 2147483647;
     }
     eps.sort((a, b) => epNumOf(a).compareTo(epNumOf(b)));
     anime.chapters = eps;
@@ -212,8 +215,8 @@ class AnimePhoenix extends MProvider {
     List<MVideo> videos = [];
     final videoSrc = template.selectFirst('video source')?.attr('src')?.trim() ?? '';
     if (videoSrc.isNotEmpty) {
-      final qMatch = RegExp(r'(\d{3,4})p').firstMatch(videoSrc);
-      final quality = qMatch?.group(1) ?? '';
+      final qStr = RegExp(r'\d{3,4}p').stringMatch(videoSrc);
+      final quality = qStr == null ? '' : qStr.replaceAll(RegExp(r'\D'), '');
       videos.add(MVideo(
         videoSrc,
         quality.isEmpty ? 'Default' : '${quality}p',
@@ -266,8 +269,8 @@ class AnimePhoenix extends MProvider {
           (await client.get(Uri.parse(srcUrl), headers: {'Referer': referer}))
               .body;
       final direct = RegExp(
-        r'''(https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?)''',
-      ).firstMatch(pageText)?.group(1);
+        r'''https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?''',
+      ).stringMatch(pageText);
       if (direct != null) {
         return [MVideo(direct, 'Default', direct, headers: {'Referer': srcUrl})];
       }
@@ -277,18 +280,12 @@ class AnimePhoenix extends MProvider {
 
   List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
+      final qA = RegExp(r'\d{3,4}\s*p').stringMatch(a.quality);
       final numA =
-          int.tryParse(
-                RegExp(r'(\d{3,4})\s*p').firstMatch(a.quality)?.group(1) ??
-                    '',
-              ) ??
-              0;
+          int.tryParse(substringBefore(qA ?? '', 'p').trim()) ?? 0;
+      final qB = RegExp(r'\d{3,4}\s*p').stringMatch(b.quality);
       final numB =
-          int.tryParse(
-                RegExp(r'(\d{3,4})\s*p').firstMatch(b.quality)?.group(1) ??
-                    '',
-              ) ??
-              0;
+          int.tryParse(substringBefore(qB ?? '', 'p').trim()) ?? 0;
       return numB - numA;
     });
     return videos;

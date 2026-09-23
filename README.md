@@ -49,7 +49,7 @@ Arabic-Anime-Mangayomi/
 
 - الامتدادات تستخدم محللات Mangayomi المدمجة (`doodExtractor`, `voeExtractor`, `mp4UploadExtractor`, `vidBomExtractor`, `streamTapeExtractor`, `filemoonExtractor`, `streamWishExtractor`, `sendVidExtractor`, `yourUploadExtractor`, `okruExtractor`) مع fallback مباشر لروابط `m3u8/mp4`.
 - ترتيب الفيديوهات تنازلي حسب الجودة (يظهر أفضل جودة أولًا).
-- `hasCloudflare: true` لـ WitAnime وAnime4up فقط؛ المواقع الأخرى تفتح مباشرة.
+- `hasCloudflare: true` لـ WitAnime وAnime4up وAnimePhoenix؛ المواقع الأخرى تفتح مباشرة.
 
 ## روابط مفيدة
 

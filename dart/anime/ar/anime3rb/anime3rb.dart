@@ -105,9 +105,11 @@ class Anime3rb extends MProvider {
       if (!href.contains('/episode/') || seen.contains(href)) continue;
       seen.add(href);
       final tag = substringAfter(href, '/episode/');
-      var numM = RegExp(r'الحلقة\s*(\d+)').firstMatch(el.text ?? '');
-      numM ??= RegExp(r'/(\d+)(?:/|$)').firstMatch(tag);
-      final num = numM?.group(1) ?? substringAfterLast(href, '/');
+      var numTxt = RegExp(r'الحلقة\s*\d+').stringMatch(el.text ?? '');
+      if (numTxt == null) numTxt = RegExp(r'/\d+(?:/|$)').stringMatch(tag);
+      final num = numTxt == null
+          ? substringAfterLast(href, '/')
+          : numTxt.replaceAll(RegExp(r'\D+'), '');
       MChapter ep = MChapter();
       ep.name = 'الحلقة $num';
       ep.url = abs(href);
@@ -124,9 +126,11 @@ class Anime3rb extends MProvider {
                 final u = e['url']?.toString() ?? '';
                 if (u.isEmpty || !u.contains('/episode/')) continue;
                 final nm = e['name']?.toString() ?? '';
-                final numM = RegExp(r'الحلقة (\d+)').firstMatch(nm);
+                final epTag = RegExp(r'الحلقة \d+').stringMatch(nm);
                 MChapter ep = MChapter();
-                ep.name = numM != null ? 'الحلقة ${numM.group(1)}' : nm;
+                ep.name = epTag != null
+                    ? 'الحلقة ${epTag.replaceAll(RegExp(r'\D+'), '')}'
+                    : nm;
                 ep.url = abs(u);
                 eps.add(ep);
               }
@@ -150,15 +154,21 @@ class Anime3rb extends MProvider {
             .body;
     String? rawVideoUrl;
     final escaped = RegExp(
-      r'&quot;video_url&quot;:&quot;(.*?)&quot;',
-    ).firstMatch(episodeHtml);
+      r'&quot;video_url&quot;:&quot;.*?&quot;',
+    ).stringMatch(episodeHtml);
     if (escaped != null) {
-      rawVideoUrl = escaped.group(1);
+      rawVideoUrl = escaped
+          .replaceAll('&quot;video_url&quot;:&quot;', '')
+          .replaceAll('&quot;', '');
     } else {
-      final plain = RegExp(
-        r'"video_url"\s*:\s*"(.*?)"',
-      ).firstMatch(episodeHtml);
-      if (plain != null) rawVideoUrl = plain.group(1);
+      final plain = RegExp(r'"video_url"\s*:\s*"[^"]*"').stringMatch(
+        episodeHtml,
+      );
+      if (plain != null) {
+        rawVideoUrl = plain
+            .replaceAll(RegExp(r'^"video_url"\s*:\s*'), '')
+            .replaceAll('"', '');
+      }
     }
     if (rawVideoUrl == null) return [];
     final playerUrl = rawVideoUrl
@@ -170,11 +180,14 @@ class Anime3rb extends MProvider {
             .body;
 
     String? json;
-    for (var m in RegExp(r'video_sources\s*=\s*(\[[\s\S]*?\]);').allMatches(
-      playerText,
-    )) {
-      final g = m.group(1);
-      if (g != null && g.length > 2) json = g;
+    final jsonMatch = RegExp(
+      r'video_sources\s*=\s*\[[\s\S]*?\];',
+    ).stringMatch(playerText);
+    if (jsonMatch != null) {
+      final candidate = jsonMatch
+          .replaceAll(RegExp(r'^video_sources\s*=\s*'), '')
+          .replaceAll(RegExp(r';$'), '');
+      if (candidate.length > 2) json = candidate;
     }
     if (json == null) return [];
 
@@ -197,18 +210,12 @@ class Anime3rb extends MProvider {
 
   List<MVideo> sortVideos(List<MVideo> videos) {
     videos.sort((a, b) {
+      final qA = RegExp(r'\d{3,4}\s*p').stringMatch(a.quality);
       final numA =
-          int.tryParse(
-                RegExp(r'(\d{3,4})\s*p').firstMatch(a.quality)?.group(1) ??
-                    '',
-              ) ??
-              0;
+          int.tryParse(substringBefore(qA ?? '', 'p').trim()) ?? 0;
+      final qB = RegExp(r'\d{3,4}\s*p').stringMatch(b.quality);
       final numB =
-          int.tryParse(
-                RegExp(r'(\d{3,4})\s*p').firstMatch(b.quality)?.group(1) ??
-                    '',
-              ) ??
-              0;
+          int.tryParse(substringBefore(qB ?? '', 'p').trim()) ?? 0;
       return numB - numA;
     });
     return videos;
