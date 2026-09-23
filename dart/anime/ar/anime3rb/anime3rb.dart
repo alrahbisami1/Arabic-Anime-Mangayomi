@@ -180,14 +180,17 @@ class Anime3rb extends MProvider {
             .body;
 
     String? json;
-    final jsonMatch = RegExp(
-      r'video_sources\s*=\s*\[[\s\S]*?\];',
-    ).stringMatch(playerText);
-    if (jsonMatch != null) {
-      final candidate = jsonMatch
+    var rest = playerText;
+    while (true) {
+      final m = RegExp(r'video_sources\s*=\s*\[[\s\S]*?\];').stringMatch(rest);
+      if (m == null) break;
+      final candidate = m
           .replaceAll(RegExp(r'^video_sources\s*=\s*'), '')
           .replaceAll(RegExp(r';$'), '');
       if (candidate.length > 2) json = candidate;
+      final tail = substringAfter(rest, m);
+      if (tail == rest) break;
+      rest = tail;
     }
     if (json == null) return [];
 
