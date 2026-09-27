@@ -241,9 +241,11 @@ class AnimePhoenix extends MProvider {
     final lower = srcUrl.toLowerCase();
     try {
       if (lower.contains('dood')) return await doodExtractor(srcUrl, null);
-      if (lower.contains('voe')) return await voeExtractor(srcUrl, null);
+      if (lower.contains('voe') || lower.contains('vidoza')) {
+        return await voeExtractor(srcUrl, null);
+      }
       if (lower.contains('mp4upload')) {
-        return await mp4UploadExtractor(srcUrl, null, '', '');
+        return await mp4UploadExtractor(srcUrl, null, referer, '');
       }
       if (lower.contains('ok.ru')) return await okruExtractor(srcUrl);
       if (lower.contains('vidbom') ||
@@ -260,6 +262,22 @@ class AnimePhoenix extends MProvider {
       if (lower.contains('streamwish')) {
         return await streamWishExtractor(srcUrl, '');
       }
+      if (lower.contains('sibnet')) return await sibnetExtractor(srcUrl, '');
+      if (lower.contains('mytv') || lower.contains('mytvs')) {
+        return await myTvExtractor(srcUrl);
+      }
+      if (lower.contains('streamlare') || lower.contains('sl-lare')) {
+        return await streamlareExtractor(srcUrl, '', '');
+      }
+      if (lower.contains('sendvid')) {
+        return await sendVidExtractor(srcUrl, null, '');
+      }
+      if (lower.contains('yourupload')) {
+        return await yourUploadExtractor(srcUrl, null, '', '');
+      }
+      if (lower.contains('gogo') || lower.contains('gogocdn')) {
+        return await gogoCdnExtractor(srcUrl);
+      }
     } catch (_) {}
     if (RegExp(r'\.(m3u8|mp4)($|\?)').hasMatch(lower)) {
       return [MVideo(srcUrl, 'Default', srcUrl, headers: {'Referer': referer})];
@@ -274,6 +292,21 @@ class AnimePhoenix extends MProvider {
       if (direct != null) {
         return [MVideo(direct, 'Default', direct, headers: {'Referer': srcUrl})];
       }
+      var unpacked = unpackJsAndCombine(pageText) ?? '';
+      if (unpacked.isEmpty) unpacked = unpackJs(pageText) ?? '';
+      final urls = <String>[];
+      var rest = unpacked.isEmpty ? pageText : unpacked;
+      for (var i = 0; i < 30; i++) {
+        final m = RegExp(r'''https?://[^"'<>\s]+?\.(?:m3u8|mp4)(?:\?[^"'<>\s]*)?''')
+            .stringMatch(rest);
+        if (m == null || m.isEmpty) break;
+        if (!urls.contains(m)) urls.add(m);
+        rest = substringAfter(rest, m);
+      }
+      return urls
+          .map((u) => MVideo(u, 'Default', u,
+              headers: {'Referer': srcUrl}))
+          .toList();
     } catch (_) {}
     return [];
   }

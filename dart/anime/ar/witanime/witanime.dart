@@ -206,36 +206,122 @@ class WitAnime extends MProvider {
     }
   }
 
-  String extractHls(String unpacked, String key) {
-    final token = '"$key":"';
-    if (unpacked.contains(token)) {
-      final rest = substringAfter(unpacked, token);
-      final url = substringBefore(rest, '"').trim();
+  String extractHls(String text, String key) {
+    final token = '$key":"';
+    if (text.contains(token)) {
+      final rest = substringAfter(text, token);
+      final url = substringBefore(rest, '"').replaceAll('\\/', '/').trim();
       if (url.startsWith('http')) return url;
     }
     return '';
   }
 
+  List<String> scanMediaUrls(String text) {
+    final urls = <String>[];
+    var rest = text;
+    for (var i = 0; i < 30; i++) {
+      final m = RegExp(r'''https?://[^\s"'<>]+''').stringMatch(rest);
+      if (m == null || m.isEmpty) break;
+      final lower = m.toLowerCase();
+      if ((lower.contains('.m3u8') || lower.contains('.mp4')) &&
+          !urls.contains(m)) {
+        urls.add(m.replaceAll('\\/', '/'));
+      }
+      rest = substringAfter(rest, m);
+    }
+    return urls;
+  }
+
   Future<List<MVideo>> resolveHlsVideos(
       String embedUrl, String quality) async {
     final videos = <MVideo>[];
+    final ids = <String>{};
     try {
       final id = extractEmbedId(embedUrl);
       if (id.isEmpty) return videos;
       final html = await fetchAudiniferEmbed(id);
       if (html.isEmpty) return videos;
-      final unpacked = unpackJsAndCombine(html) ?? '';
-      if (unpacked.isEmpty) return videos;
-      for (final key in ['hls3', 'hls2']) {
-        final hls = extractHls(unpacked, key);
+
+      var text = unpackJsAndCombine(html) ?? '';
+      if (text.isEmpty) text = unpackJs(html) ?? '';
+      if (text.isEmpty) text = html;
+
+      for (final key in [
+        'hls3', 'hls2', 'hls1', 'hls', 'file', 'src', 'source', 'mp4', 'download',
+      ]) {
+        final hls = extractHls(text, key);
         if (hls.isEmpty) continue;
-        videos.add(MVideo(hls, quality, hls, headers: {
-          ...browserHeaders,
-          'Referer': 'https://audinifer.com/',
-        }));
+        if (ids.add(hls)) {
+          videos.add(MVideo(hls, quality, hls, headers: {
+            ...browserHeaders,
+            'Referer': 'https://audinifer.com/',
+          }));
+        }
+      }
+      if (videos.isEmpty) {
+        for (final u in scanMediaUrls(text)) {
+          if (ids.add(u)) {
+            videos.add(MVideo(u, quality, u, headers: {
+              ...browserHeaders,
+              'Referer': 'https://audinifer.com/',
+            }));
+          }
+        }
       }
     } catch (_) {}
     return videos;
+  }
+
+  Future<List<MVideo>> otherServerVideos(
+      String embedUrl, String referer, String quality) async {
+    final lower = embedUrl.toLowerCase();
+    try {
+      if (lower.contains('dood')) return await doodExtractor(embedUrl, null);
+      if (lower.contains('voe') || lower.contains('vidoza')) {
+        return await voeExtractor(embedUrl, null);
+      }
+      if (lower.contains('mp4upload')) {
+        return await mp4UploadExtractor(embedUrl, null, referer, '');
+      }
+      if (lower.contains('ok.ru')) return await okruExtractor(embedUrl);
+      if (lower.contains('vidbom') ||
+          lower.contains('vidbam') ||
+          lower.contains('vidbm')) {
+        return await vidBomExtractor(embedUrl);
+      }
+      if (lower.contains('streamtape')) {
+        return await streamTapeExtractor(embedUrl, null);
+      }
+      if (lower.contains('filemoon')) {
+        return await filemoonExtractor(embedUrl, '', '');
+      }
+      if (lower.contains('streamwish')) {
+        return await streamWishExtractor(embedUrl, '');
+      }
+      if (lower.contains('sibnet')) return await sibnetExtractor(embedUrl, '');
+      if (lower.contains('mytv') || lower.contains('mytvs')) {
+        return await myTvExtractor(embedUrl);
+      }
+      if (lower.contains('streamlare') || lower.contains('sl-lare')) {
+        return await streamlareExtractor(embedUrl, '', '');
+      }
+      if (lower.contains('sendvid')) {
+        return await sendVidExtractor(embedUrl, null, '');
+      }
+      if (lower.contains('yourupload')) {
+        return await yourUploadExtractor(embedUrl, null, '', '');
+      }
+      if (lower.contains('gogo') || lower.contains('gogocdn')) {
+        return await gogoCdnExtractor(embedUrl);
+      }
+    } catch (_) {}
+    if (RegExp(r'\.(m3u8|mp4)($|\?)').hasMatch(lower)) {
+      return [
+        MVideo(embedUrl, quality, embedUrl,
+            headers: {...browserHeaders, 'Referer': referer}),
+      ];
+    }
+    return [];
   }
 
   @override
@@ -299,8 +385,14 @@ class WitAnime extends MProvider {
                 final quality = '$q • $label';
                 final embedUrl = await resolveGate(token, url, csrf, cookie);
                 if (embedUrl.isEmpty) continue;
-                final hlsVideos = await resolveHlsVideos(embedUrl, quality);
-                if (hlsVideos.isNotEmpty) videos.addAll(hlsVideos);
+                final resolved = await resolveHlsVideos(embedUrl, quality);
+                if (resolved.isNotEmpty) {
+                  videos.addAll(resolved);
+                } else {
+                  final others =
+                      await otherServerVideos(embedUrl, url, quality);
+                  if (others.isNotEmpty) videos.addAll(others);
+                }
               } catch (_) {}
             }
           }
